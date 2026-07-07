@@ -69,6 +69,9 @@ let boss = null;
 let pendingLevel = 1;         // next level, shown during the level-up banner
 let hasWhistle = false;
 let whistleCoolT = 0;         // ms until the whistle recharges
+let whistleFxT = 0;           // ms remaining in the shockwave animation
+let whistleFxX = 0, whistleFxY = 0;   // shockwave origin (player center)
+const WHISTLE_FX_MS = 650;
 
 function enemySpeedMultForLevel(lvl) { return 1 + (lvl - 1) * 0.18; }
 
@@ -183,6 +186,7 @@ function update(dt) {
   if (paused) return;
 
   if (whistleCoolT > 0) whistleCoolT -= dt;
+  if (whistleFxT > 0) whistleFxT -= dt;
 
   const room = getRoomState(currentRoom.x, currentRoom.y);
 
@@ -238,6 +242,11 @@ function activateWhistle(room) {
     if (e.state === E_ACTIVE || e.state === E_KO) e.stunT = WHISTLE_STUN_MS;
   }
   if (boss && boss.state === 'active') boss.stunT = WHISTLE_STUN_MS;
+  // kick off the shockwave animation from the player's center
+  const c = centerOf(player);
+  whistleFxT = WHISTLE_FX_MS;
+  whistleFxX = c.x;
+  whistleFxY = c.y;
   sfx.whistle();
 }
 
@@ -367,6 +376,7 @@ function draw(now) {
     .forEach(e => drawCat(ctx, e, now));
   if (levelPhase === 'boss' && boss && !boss.gone) drawBoss(ctx, boss, now);
   if (state !== S_LIFE_LOST) drawDogman(ctx, player);
+  if (whistleFxT > 0) drawWhistleFx(now);
   drawCuffPrompt(room);
   if (levelPhase === 'boss' && boss) drawBossHealth();
   ctx.restore();
@@ -384,6 +394,33 @@ function draw(now) {
   }
   if (state === S_GAMEOVER) drawOverlayText('GAME OVER', 'Press ENTER to try again');
   if (state === S_VICTORY) drawOverlayText('CITY SAVED!', `You beat all ${TOTAL_LEVELS} bosses! Press ENTER to play again`);
+}
+
+/* Expanding cyan shockwave rings when the whistle is blown. */
+function drawWhistleFx(now) {
+  const p = 1 - whistleFxT / WHISTLE_FX_MS;   // 0 -> 1
+  const maxR = 300;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    const rp = p - i * 0.16;                    // stagger the rings
+    if (rp <= 0) continue;
+    const r = rp * maxR;
+    const alpha = (1 - rp) * 0.7;
+    ctx.strokeStyle = `rgba(143,216,255,${alpha})`;
+    ctx.lineWidth = 5 - i;
+    ctx.beginPath();
+    ctx.arc(whistleFxX, whistleFxY, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // little musical notes riding the leading edge
+  ctx.fillStyle = `rgba(143,216,255,${(1 - p) * 0.9})`;
+  const r = p * maxR;
+  for (let i = 0; i < 6; i++) {
+    const a = now * 0.004 + (i * Math.PI * 2) / 6;
+    drawStar(ctx, whistleFxX + Math.cos(a) * r, whistleFxY + Math.sin(a) * r, 3.5);
+  }
+  ctx.restore();
 }
 
 /* Boss health bar, pinned just under the HUD (drawn inside the room transform). */

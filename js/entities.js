@@ -232,14 +232,14 @@ const BOSS_HIT_FLASH_MS = 180;
 
 class Boss {
   constructor(level) {
-    this.w = 70; this.h = 70;
+    this.w = 62; this.h = 62;
     this.x = 0; this.y = 0;
     this.level = level;
     this.maxHp = 3 + level * 2;      // L1:5, L2:7, L3:9 baton hits
     this.hp = this.maxHp;
-    this.speed = 62 + level * 18;    // L1:80, L2:98, L3:116 px/s
+    this.speed = 100 + level * 22;   // L1:122, L2:144, L3:166 px/s
     this.state = 'active';           // 'active' | 'dead'
-    this.introT = 1400;              // roars into place before it moves
+    this.introT = 700;               // brief roar before it charges
     this.hitFlash = 0;
     this.stunT = 0;                  // frozen by the whistle
     this.deadT = 0;                  // death animation timer
