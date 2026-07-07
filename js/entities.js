@@ -246,10 +246,25 @@ class Boss {
     this.animT = 0;
   }
 
-  placeInRoom() {
-    // upper-center of the arena; the player enters from a door, so this keeps distance
+  placeInRoom(grid) {
+    // Find a spot whose whole body is clear of walls/decorations, preferring
+    // the upper-center of the arena (keeps distance from the player's door).
+    const anchorC = COLS / 2, anchorR = 2.5;
+    const cells = [];
+    for (let ty = 1; ty <= ROWS - 2; ty++) {
+      for (let tx = 1; tx <= COLS - 2; tx++) cells.push([tx, ty]);
+    }
+    cells.sort((a, b) =>
+      ((a[0] - anchorC) ** 2 + (a[1] - anchorR) ** 2) -
+      ((b[0] - anchorC) ** 2 + (b[1] - anchorR) ** 2));
+    for (const [tx, ty] of cells) {
+      const x = tx * TILE + (TILE - this.w) / 2;
+      const y = ty * TILE + (TILE - this.h) / 2;
+      if (!rectHitsSolid(grid, x, y, this.w, this.h)) { this.x = x; this.y = y; return; }
+    }
+    // Fallback (should never trigger): drop it in the room center.
     this.x = (COLS / 2) * TILE - this.w / 2;
-    this.y = 2 * TILE;
+    this.y = (ROWS / 2) * TILE - this.h / 2;
   }
 
   get gone() { return this.state === 'dead' && this.deadT <= 0; }

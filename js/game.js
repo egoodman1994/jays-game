@@ -254,7 +254,7 @@ function activateWhistle(room) {
 function startBossFight() {
   levelPhase = 'boss';
   boss = new Boss(level);
-  boss.placeInRoom();
+  boss.placeInRoom(grid);
   sfx.bossAppear();
 }
 
