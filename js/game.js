@@ -625,11 +625,11 @@ function drawTitle() {
   // big preview of the hero
   const preview = new Player();
   preview.x = VIEW_W / 2 - 17;
-  preview.y = 220;
+  preview.y = 265;
   ctx.save();
-  ctx.translate(VIEW_W / 2, 260);
+  ctx.translate(VIEW_W / 2, 305);
   ctx.scale(2.2, 2.2);
-  ctx.translate(-VIEW_W / 2, -260);
+  ctx.translate(-VIEW_W / 2, -305);
   drawDogman(ctx, preview);
   ctx.restore();
 
