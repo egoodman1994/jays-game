@@ -328,7 +328,7 @@ function drawCuffPrompt(room) {
       roundRect(ctx, c.x - 40, e.y - 34, 80, 18, 6);
       ctx.fill();
       ctx.fillStyle = '#fff';
-      ctx.fillText('X: cuff!', c.x, e.y - 21);
+      ctx.fillText(window.IS_TOUCH ? 'CUFF!' : 'X: cuff!', c.x, e.y - 21);
       ctx.restore();
       return;
     }
@@ -444,7 +444,7 @@ function drawTitle() {
   if (Math.floor(performance.now() / 500) % 2 === 0) {
     ctx.fillStyle = '#7ee081';
     ctx.font = 'bold 22px monospace';
-    ctx.fillText('PRESS ENTER TO START', VIEW_W / 2, VIEW_H - 28);
+    ctx.fillText(window.IS_TOUCH ? 'TAP TO START' : 'PRESS ENTER TO START', VIEW_W / 2, VIEW_H - 28);
   }
   ctx.textAlign = 'left';
 }
