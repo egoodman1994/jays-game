@@ -44,6 +44,16 @@ const sfx = (() => {
     hurt()    { tone(160, 0.2, 'sawtooth', 0.2, 0, 60); },
     wake()    { tone(200, 0.1, 'square', 0.1, 0, 500); },
     loseLife(){ tone(300, 0.25, 'triangle', 0.2, 0, 80); tone(150, 0.4, 'triangle', 0.2, 0.2, 60); },
+    whistle() {
+      tone(1400, 0.14, 'sine', 0.16, 0, 2600);
+      tone(2100, 0.16, 'sine', 0.12, 0.08, 2600);
+    },
+    bossAppear() {
+      [140, 116, 98].forEach((f, i) => tone(f, 0.32, 'sawtooth', 0.2, i * 0.14, f * 0.9));
+    },
+    levelUp() {
+      [523, 659, 784, 988, 1319].forEach((f, i) => tone(f, 0.16, 'square', 0.13, i * 0.1));
+    },
     win() {
       [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.18, 'square', 0.12, i * 0.14));
     },

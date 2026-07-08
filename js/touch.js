@@ -47,8 +47,9 @@
       -webkit-tap-highlight-color: transparent;
     }
     .touch-btn.held { filter: brightness(1.6); }
-    #btn-swing { right: 22px; bottom: 104px; background: rgba(43,87,201,0.6); }
-    #btn-cuff  { right: 122px; bottom: 22px; background: rgba(40,140,70,0.6); }
+    #btn-swing   { right: 22px;  bottom: 104px; background: rgba(43,87,201,0.6); }
+    #btn-cuff    { right: 122px; bottom: 22px;  background: rgba(40,140,70,0.6); }
+    #btn-whistle { right: 122px; bottom: 104px; background: rgba(150,90,200,0.6); display: none; }
     #rotate-hint {
       display: none; position: fixed; top: 0; left: 0; right: 0;
       padding: 10px; z-index: 20; text-align: center;
@@ -75,7 +76,13 @@
   const nub = makeEl('div', 'stick-nub');
   const btnSwing = makeEl('div', 'btn-swing', 'touch-btn', 'SWING');
   const btnCuff = makeEl('div', 'btn-cuff', 'touch-btn', 'CUFF');
+  const btnWhistle = makeEl('div', 'btn-whistle', 'touch-btn', 'WHISTLE');
   makeEl('div', 'rotate-hint', null, 'Tip: turn your device sideways for the best view');
+
+  // game.js calls this when the whistle is unlocked / on a new game.
+  window.updateWhistleButton = (unlocked) => {
+    btnWhistle.style.display = unlocked ? 'flex' : 'none';
+  };
 
   /* Any first press also acts as "Enter" (start/restart) and unlocks audio. */
   function pressStart() {
@@ -164,6 +171,22 @@
 
   bindHoldButton(btnSwing, () => { attackPressed = true; });
   bindHoldButton(btnCuff, () => { cuffPressed = true; });
+
+  /* Whistle is a single tap (it has a long cooldown, no auto-repeat needed). */
+  function bindTapButton(btn, fn) {
+    const down = (e) => {
+      e.preventDefault();
+      if (btn.setPointerCapture) btn.setPointerCapture(e.pointerId);
+      btn.classList.add('held');
+      pressStart();
+      fn();
+    };
+    const up = () => btn.classList.remove('held');
+    btn.addEventListener('pointerdown', down);
+    btn.addEventListener('pointerup', up);
+    btn.addEventListener('pointercancel', up);
+  }
+  bindTapButton(btnWhistle, () => { whistlePressed = true; });
 
   /* Tapping the game itself (right half, outside the buttons) also starts. */
   canvas.addEventListener('pointerdown', (e) => {

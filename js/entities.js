@@ -136,6 +136,9 @@ const CAT_CHASE_SPEED = 100;
 const CAT_WANDER_SPEED = 45;
 const CAT_SIGHT = 260;
 
+// Scaled up each level by game.js so later loops feel faster/harder.
+let ENEMY_SPEED_MULT = 1;
+
 class Enemy {
   constructor(tx, ty) {
     this.w = 34; this.h = 34;
@@ -145,6 +148,7 @@ class Enemy {
     this.state = E_ACTIVE;
     this.koT = 0;            // ms remaining unconscious
     this.fadeT = 0;          // ms remaining in fade-out
+    this.stunT = 0;          // ms remaining frozen by the whistle
     this.wanderT = 0;
     this.wanderDir = { x: 0, y: 0 };
     this.knock = null;       // {x, y, t} knockback impulse
@@ -175,17 +179,20 @@ class Enemy {
 
   update(dt, player, grid) {
     this.animT += dt;
+    if (this.stunT > 0) this.stunT -= dt;
+
     if (this.state === E_CUFFED) {
       this.fadeT -= dt;
       if (this.fadeT <= 0) this.state = E_GONE;
       return;
     }
     if (this.state === E_KO) {
-      this.koT -= dt;
+      if (this.stunT <= 0) this.koT -= dt;   // whistle stun pauses the wake timer
       if (this.koT <= 0) this.wakeUp();
       return;
     }
     if (this.state !== E_ACTIVE) return;
+    if (this.stunT > 0) return;   // frozen in place by the whistle
 
     // Knockback from a baton hit that didn't land (grazes) or future use
     if (this.knock) {
@@ -202,8 +209,8 @@ class Enemy {
       const pc = centerOf(player), ec = centerOf(this);
       const len = Math.max(1, Math.hypot(pc.x - ec.x, pc.y - ec.y));
       moveWithCollision(this,
-        ((pc.x - ec.x) / len) * CAT_CHASE_SPEED * step,
-        ((pc.y - ec.y) / len) * CAT_CHASE_SPEED * step, grid);
+        ((pc.x - ec.x) / len) * CAT_CHASE_SPEED * ENEMY_SPEED_MULT * step,
+        ((pc.y - ec.y) / len) * CAT_CHASE_SPEED * ENEMY_SPEED_MULT * step, grid);
     } else {
       // wander
       this.wanderT -= dt;
@@ -213,9 +220,82 @@ class Enemy {
         this.wanderDir = dirs[Math.floor(Math.random() * dirs.length)];
       }
       moveWithCollision(this,
-        this.wanderDir.x * CAT_WANDER_SPEED * step,
-        this.wanderDir.y * CAT_WANDER_SPEED * step, grid);
+        this.wanderDir.x * CAT_WANDER_SPEED * ENEMY_SPEED_MULT * step,
+        this.wanderDir.y * CAT_WANDER_SPEED * ENEMY_SPEED_MULT * step, grid);
     }
+  }
+}
+
+/* ---------- Boss: the big orange brute ---------- */
+
+const BOSS_HIT_FLASH_MS = 180;
+
+class Boss {
+  constructor(level) {
+    this.w = 62; this.h = 62;
+    this.x = 0; this.y = 0;
+    this.level = level;
+    this.maxHp = 3 + level * 2;      // L1:5, L2:7, L3:9 baton hits
+    this.hp = this.maxHp;
+    this.speed = 100 + level * 22;   // L1:122, L2:144, L3:166 px/s
+    this.state = 'active';           // 'active' | 'dead'
+    this.introT = 700;               // brief roar before it charges
+    this.hitFlash = 0;
+    this.stunT = 0;                  // frozen by the whistle
+    this.deadT = 0;                  // death animation timer
+    this.animT = 0;
+  }
+
+  placeInRoom(grid) {
+    // Find a spot whose whole body is clear of walls/decorations, preferring
+    // the upper-center of the arena (keeps distance from the player's door).
+    const anchorC = COLS / 2, anchorR = 2.5;
+    const cells = [];
+    for (let ty = 1; ty <= ROWS - 2; ty++) {
+      for (let tx = 1; tx <= COLS - 2; tx++) cells.push([tx, ty]);
+    }
+    cells.sort((a, b) =>
+      ((a[0] - anchorC) ** 2 + (a[1] - anchorR) ** 2) -
+      ((b[0] - anchorC) ** 2 + (b[1] - anchorR) ** 2));
+    for (const [tx, ty] of cells) {
+      const x = tx * TILE + (TILE - this.w) / 2;
+      const y = ty * TILE + (TILE - this.h) / 2;
+      if (!rectHitsSolid(grid, x, y, this.w, this.h)) { this.x = x; this.y = y; return; }
+    }
+    // Fallback (should never trigger): drop it in the room center.
+    this.x = (COLS / 2) * TILE - this.w / 2;
+    this.y = (ROWS / 2) * TILE - this.h / 2;
+  }
+
+  get gone() { return this.state === 'dead' && this.deadT <= 0; }
+
+  hitByBaton() {
+    if (this.state !== 'active' || this.introT > 0) return;
+    this.hp--;
+    this.hitFlash = BOSS_HIT_FLASH_MS;
+    sfx.hit();
+    if (this.hp <= 0) {
+      this.state = 'dead';
+      this.deadT = 900;
+      sfx.fade();
+    }
+  }
+
+  update(dt, player, grid) {
+    this.animT += dt;
+    if (this.hitFlash > 0) this.hitFlash -= dt;
+    if (this.stunT > 0) this.stunT -= dt;
+    if (this.state === 'dead') { this.deadT -= dt; return; }
+    if (this.introT > 0) { this.introT -= dt; return; }
+    if (this.stunT > 0) return;
+
+    if (player.hearts <= 0) return;
+    const step = dt / 1000;
+    const pc = centerOf(player), ec = centerOf(this);
+    const len = Math.max(1, Math.hypot(pc.x - ec.x, pc.y - ec.y));
+    moveWithCollision(this,
+      ((pc.x - ec.x) / len) * this.speed * step,
+      ((pc.y - ec.y) / len) * this.speed * step, grid);
   }
 }
 
@@ -394,6 +474,9 @@ function drawCat(ctx, e, now) {
 
   ctx.restore();
 
+  // whistle stun swirl (over active or KO crooks alike)
+  if (e.stunT > 0) drawStunOrbits(ctx, cx, cy - 26, now);
+
   // KO extras drawn upright above the body
   if (e.state === E_KO) {
     drawKoStars(ctx, cx, cy - 28, now);
@@ -456,6 +539,89 @@ function drawCuffs(ctx, cx, cy) {
   ctx.beginPath(); ctx.arc(cx - 5, cy, 5, 0, Math.PI * 2); ctx.stroke();
   ctx.beginPath(); ctx.arc(cx + 5, cy, 5, 0, Math.PI * 2); ctx.stroke();
   ctx.restore();
+}
+
+/* Cyan swirl shown while an enemy (or boss) is whistle-stunned. */
+function drawStunOrbits(ctx, cx, cy, now) {
+  ctx.save();
+  ctx.fillStyle = '#8fd8ff';
+  for (let i = 0; i < 3; i++) {
+    const a = now * 0.012 + (i * Math.PI * 2) / 3;
+    drawStar(ctx, cx + Math.cos(a) * 12, cy + Math.sin(a) * 5, 3);
+  }
+  ctx.restore();
+}
+
+/* The big orange boss brute. */
+function drawBoss(ctx, b, now) {
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  ctx.save();
+
+  if (b.state === 'dead') {
+    const k = Math.max(0, b.deadT / 900);
+    ctx.globalAlpha = k;
+    ctx.translate(cx, cy);
+    ctx.scale(0.5 + 0.5 * k, 0.5 + 0.5 * k);
+    ctx.rotate((1 - k) * 1.3);
+    ctx.translate(-cx, -cy);
+  }
+
+  // ground shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(cx, b.y + b.h - 4, b.w * 0.44, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const bob = b.introT > 0 ? Math.sin(now * 0.02) * 2 : Math.sin(b.animT * 0.006) * 3;
+  ctx.translate(cx, cy + bob);
+
+  const flash = b.hitFlash > 0 && Math.floor(b.hitFlash / 45) % 2 === 0;
+  const body = flash ? '#ffe0b0' : '#f07d1a';
+  const dark = flash ? '#ffc080' : '#c1560a';
+
+  // arms / fists
+  ctx.fillStyle = dark;
+  ctx.beginPath(); ctx.arc(-30, 8, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(30, 8, 10, 0, Math.PI * 2); ctx.fill();
+
+  // body
+  ctx.fillStyle = body;
+  roundRect(ctx, -27, -10, 54, 42, 15);
+  ctx.fill();
+  // chest plate
+  ctx.fillStyle = dark;
+  roundRect(ctx, -15, 2, 30, 24, 9);
+  ctx.fill();
+
+  // head
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.arc(0, -27, 23, 0, Math.PI * 2); ctx.fill();
+  // pointy ears
+  ctx.beginPath(); ctx.moveTo(-21, -37); ctx.lineTo(-13, -57); ctx.lineTo(-4, -39); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(21, -37); ctx.lineTo(13, -57); ctx.lineTo(4, -39); ctx.closePath(); ctx.fill();
+
+  // angry brows
+  ctx.strokeStyle = '#3a1e05';
+  ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-15, -33); ctx.lineTo(-4, -28); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(15, -33); ctx.lineTo(4, -28); ctx.stroke();
+  // eyes
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(-9, -24, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(9, -24, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = b.state === 'active' ? '#e11d1d' : '#7a3333';
+  ctx.beginPath(); ctx.arc(-9, -23, 2.3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(9, -23, 2.3, 0, Math.PI * 2); ctx.fill();
+  // snarling mouth with fangs
+  ctx.fillStyle = '#3a1e05';
+  roundRect(ctx, -10, -16, 20, 8, 3); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.moveTo(-7, -16); ctx.lineTo(-4, -10); ctx.lineTo(-1, -16); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(1, -16); ctx.lineTo(4, -10); ctx.lineTo(7, -16); ctx.closePath(); ctx.fill();
+
+  ctx.restore();
+
+  if (b.stunT > 0) drawStunOrbits(ctx, cx, cy - 58, now);
 }
 
 /* rounded-rect path helper */

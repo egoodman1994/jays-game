@@ -32,6 +32,11 @@ const CUFF_TIME_MS = 500;       // cuffing animation
 const FADE_TIME_MS = 900;       // cuffed enemy fade-out
 const INVULN_MS = 1200;         // player i-frames after taking damage
 
+// Level loop: clear crooks -> boss -> repeat, TOTAL_LEVELS times, getting harder.
+const TOTAL_LEVELS = 3;
+const WHISTLE_COOLDOWN_MS = 30000;  // whistle recharge
+const WHISTLE_STUN_MS = 3000;       // how long the whistle freezes enemies
+
 /*
   Room defs keyed by "x,y" in the world grid.
   rocks / trees / crates: [tileX, tileY] solid decorations.
@@ -138,5 +143,44 @@ function buildGrid(rx, ry) {
 function totalEnemyCount() {
   let n = 0;
   for (const key in ROOM_DEFS) n += ROOM_DEFS[key].enemies.length;
+  return n;
+}
+
+/* Is [tx,ty] an interior floor tile of this room (not a wall or decoration)? */
+function isRoomTileFree(def, tx, ty) {
+  if (tx < 1 || tx > COLS - 2 || ty < 1 || ty > ROWS - 2) return false;
+  const occupied = [...(def.trees || []), ...(def.rocks || []), ...(def.crates || [])];
+  return !occupied.some(([c, r]) => c === tx && r === ty);
+}
+
+/*
+  Enemy spawn points for a room at a given level. Level 1 uses the base
+  spawns; each further level adds one extra crook per base spawn, placed on a
+  nearby free tile. This is what makes "the same level with more enemies".
+*/
+function roomEnemiesForLevel(def, level) {
+  const base = def.enemies || [];
+  const spawns = base.map((e) => e.slice());
+  if (base.length === 0) return spawns;
+
+  const extraPer = level - 1;   // L1:0, L2:1, L3:2 extra per base spawn
+  const offsets = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+  for (const [bx, by] of base) {
+    let added = 0;
+    for (const [ox, oy] of offsets) {
+      if (added >= extraPer) break;
+      const tx = bx + ox, ty = by + oy;
+      if (isRoomTileFree(def, tx, ty) && !spawns.some(([c, r]) => c === tx && r === ty)) {
+        spawns.push([tx, ty]);
+        added++;
+      }
+    }
+  }
+  return spawns;
+}
+
+function totalEnemyCountForLevel(level) {
+  let n = 0;
+  for (const key in ROOM_DEFS) n += roomEnemiesForLevel(ROOM_DEFS[key], level).length;
   return n;
 }
